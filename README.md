@@ -1,0 +1,6 @@
+# MapreduceHomework
+
+## InvertedIndex
+- 
+
+## TriangleCount
