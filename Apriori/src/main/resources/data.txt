@@ -1,0 +1,6 @@
+type type1 yes journal
+journal sbt type yes
+hello sbt target journal yes type
+external library scratch console type journal yes
+hello external console type yes journal
+yes sbt type

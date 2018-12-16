@@ -107,4 +107,7 @@ yaml
 test
 test.py
 conf/config.yaml
-
+*.iml
+.DS_STORE
+*.class
+test.scala
