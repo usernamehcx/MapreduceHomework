@@ -1,66 +1,83 @@
+import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
-import scala.collection.mutable
 import scala.util.control.Breaks
 
 object Apriori {
-  def main(args: Array[String]): Unit = {
-    val cf = new SparkConf()
-    cf.setAppName("Apriori")
-    cf.setMaster("local")
-    val sc = new SparkContext(cf)
+  val cf = new SparkConf()
+  cf.setAppName("Apriori")
+  cf.setMaster("local")
+  val sc = new SparkContext(cf)
 
-    val minSup = 0.5
-    val txtFile = sc.textFile("hdfs://localhost:9000/hadoop/data.txt")
-    val mydata = txtFile.collect()
-    var data = Set[Set[String]]() // file data
-    var itemsets = Set[Set[String]]() // item sets
+  def solution(inPath: String, outPath: String, minSup: Float): Unit = {
+    val txtFile = sc.textFile(inPath)
+    val transactions: RDD[Set[String]] = txtFile.map(line => line.split(" ").toSet)
+    //    println(transactions.collect().mkString(","))
 
-    // get itemsets
-    for (i <- mydata.indices) {
-      val d = mydata(i).split(" ")
-      data += d.toSet
-      for (j <- d) {
-        itemsets += Set[String](j)
-      }
-    }
+    var itemsets: Array[Set[String]] = transactions.flatMap(line => line).distinct().collect().map(Set(_)) // item sets
+
+    val mydata = transactions.collect()
+    println(itemsets.mkString(","))
 
     // the number of transactions
-    val transLen = data.size
+    val transLen = mydata.length
+    // frequent set
+    var L = Array[Array[(Set[String], Float)]]()
 
+    var count = 0
     val loop = new Breaks
     loop.breakable {
-      while (itemsets.nonEmpty && itemsets.size > 1) {
+      while (itemsets.nonEmpty && itemsets.length > 1) {
+        count += 1
 
-        //get candidate
-        val candidate = mutable.HashMap[Set[String], Int]()
-        for (itemset <- itemsets) {
-          for (transaction <- data) {
-            if (itemset.&(transaction).equals(itemset)) {
-              if (candidate.contains(itemset)) {
-                candidate(itemset) += 1
-              } else {
-                candidate(itemset) = 1
-              }
+        //get candidatedate
+        var candidate = sc.parallelize(itemsets)
+          .map(a =>
+            if (mydata.count(data => a.subsetOf(data)) / transLen.toFloat >= minSup) {
+              Tuple2(a, mydata.count(data => a.subsetOf(data)) / transLen.toFloat)
+            } else {
+              (-1, -1)
             }
-          }
+          )
+          .filter(_ != (-1, -1)).collect()
+        println(candidate.mkString("\n"))
+
+        val k = candidate.map {
+          case a: (Set[String], Float) => a.asInstanceOf[(Set[String], Float)]
         }
 
-        // get frequent k item set
-        val L_k = candidate.filter(l => l._2 / transLen.toFloat >= minSup)
+        L = L :+ k
 
         // prepare for next iteration
-
-        println(candidate.mkString("#"))
-        println(L_k.mkString("@"))
-        loop.break
+        var nextItemSets = Set[Set[String]]()
+        for (i <- k.indices) {
+          for (j <- i + 1 until k.length) {
+            val unionSet = k(i)._1.|(k(j)._1)
+            nextItemSets += unionSet
+          }
+        }
+        itemsets = nextItemSets.toArray
+        //                loop.break
       }
     }
-    println(itemsets.mkString(":"))
-    println(data.mkString(","))
+    var result = Array[String]()
+    var str = ""
+    for (item <- L) {
+      for (i <- item) {
+        str = f"${i._1.mkString(",")}%s: ${i._2}%.2f"
+        println(str)
+        result = result :+ str
+      }
+      println()
+    }
+    sc.parallelize(result).saveAsTextFile(outPath)
+  }
 
-
-    //    println(data(0).mkString(","))
-    //
+  def main(args: Array[String]): Unit = {
+    if (args.length < 3){
+      println("Useage: <inputPath> <outPath> <minSupp>")
+      System.exit(0)
+    }
+    solution(args(0), args(1), args(2).toFloat)
   }
 }
