@@ -111,3 +111,4 @@ conf/config.yaml
 .DS_STORE
 *.class
 test.scala
+commit
